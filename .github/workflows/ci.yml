@@ -1,0 +1,86 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  orchestrator-tests:
+    name: Orchestrator unit tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: orchestrator
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install
+        run: pip install -r requirements.txt
+      - name: Test
+        run: python -m pytest tests -q --maxfail=1
+      - name: Lint (pyflakes-level)
+        run: |
+          pip install ruff
+          ruff check . --select E9,F63,F7,F82 --output-format concise
+
+  app-tests:
+    name: App smoke test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.txt
+      - name: /health reports a role
+        env:
+          REGION_ROLE: secondary
+          REGION_NAME: southindia
+        run: |
+          python - <<'EOF'
+          import json, os
+          os.environ.setdefault("REGION_ROLE", "secondary")
+          from main import app
+          c = app.test_client()
+          r = c.get("/health")
+          assert r.status_code == 200, r.status_code
+          body = r.get_json()
+          assert body["status"] == "ok"
+          assert body["role"] == "secondary"
+          assert "primary" not in body["role"]
+          print("health ok:", json.dumps(body))
+          html = c.get("/").get_data(as_text=True)
+          assert "SECONDARY" in html
+          EOF
+
+  bicep:
+    name: Bicep build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Bicep
+        run: |
+          curl -sLo bicep https://github.com/Azure/bicep/releases/latest/download/bicep-linux-x64
+          chmod +x bicep && sudo mv bicep /usr/local/bin/
+      - run: |
+          bicep build infra/main.bicep --stdout > /dev/null
+          for f in infra/modules/*.bicep; do bicep build "$f" --stdout > /dev/null; done
+          bicep lint infra/main.bicep
+
+  drill-harness:
+    name: Drill harness syntax
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python -m py_compile scripts/dr-drill.py && echo "compiles"
+      - run: shellcheck scripts/*.sh || true

@@ -1,0 +1,9 @@
+azure-functions>=1.19.0
+azure-identity>=1.19.0
+azure-cosmos>=4.8.0
+azure-mgmt-web>=7.3.0
+azure-mgmt-sql>=3.0.1
+azure-mgmt-cdn>=13.0.0
+aiohttp>=3.10.0
+pytest>=8.3.0
+pytest-asyncio>=0.24.0

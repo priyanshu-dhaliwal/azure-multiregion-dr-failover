@@ -1,0 +1,78 @@
+name: Monthly DR drill
+
+# The most important workflow in this repo. A DR path that is not exercised
+# monthly is a DR path that does not work.
+#
+# It runs against the DEV environment by default. Promote it to prod only when
+# the drill has passed in dev for three consecutive months.
+
+on:
+  schedule:
+    - cron: '0 6 1 * *'      # 06:00 UTC on the 1st of each month
+  workflow_dispatch:
+    inputs:
+      drill:
+        description: Which drill to run
+        type: choice
+        options: [app-service-outage, sql-failure, frontdoor-origin-disable]
+        default: app-service-outage
+      environment:
+        description: Target environment
+        type: choice
+        options: [dev, prod]
+        default: dev
+
+permissions:
+  id-token: write
+  contents: write
+
+jobs:
+  drill:
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment || 'dev' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Run drill
+        env:
+          FRONTDOOR_HOST: ${{ vars.FRONTDOOR_HOST }}
+          PRIMARY_RG: ${{ vars.PRIMARY_RG }}
+          SECONDARY_RG: ${{ vars.SECONDARY_RG }}
+          GLOBAL_RG: ${{ vars.GLOBAL_RG }}
+          PRIMARY_APP: ${{ vars.PRIMARY_APP }}
+          SECONDARY_APP: ${{ vars.SECONDARY_APP }}
+          AFD_PROFILE: ${{ vars.AFD_PROFILE }}
+          FAILOVER_GROUP: ${{ vars.FAILOVER_GROUP }}
+        run: |
+          python scripts/dr-drill.py "${{ github.event.inputs.drill || 'app-service-outage' }}"
+
+      - name: Commit the drill result
+        if: always()
+        run: |
+          if git diff --quiet docs/drills.md; then
+            echo "no new drill row"; exit 0
+          fi
+          git config user.name "dr-drill-bot"
+          git config user.email "dr-drill-bot@users.noreply.github.com"
+          git add docs/drills.md
+          git commit -m "chore(dr): record drill result [skip ci]"
+          git push
+
+      - name: Fail the workflow if the drill failed
+        # A failed drill is an incident: the DR path did not work. Do not let it
+        # go green because the harness itself exited 0.
+        run: |
+          if grep -q "❌ FAILED" docs/drills.md; then
+            echo "::error::DR drill FAILED — failover did not complete"
+            exit 1
+          fi

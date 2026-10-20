@@ -1,0 +1,12 @@
+{
+  "version": "2.0",
+  "logging": {
+    "applicationInsights": {
+      "samplingSettings": { "isEnabled": true, "maxTelemetryItemsPerSecond": 20 }
+    }
+  },
+  "extensions": {
+    "http": { "routePrefix": "api/dr" }
+  },
+  "functionTimeout": "00:10:00"
+}

@@ -1,0 +1,33 @@
+# Local values
+*.tfstate
+.terraform/
+*.tfvars
+!*.tfvars.example
+
+# Deployment artefacts
+infra/main.json
+infra/modules/*.json
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.deps/
+.pytest_cache/
+.ruff_cache/
+
+# Azure Functions local settings
+local.settings.json
+
+# Logs
+*.log
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Local env
+.env
+.env.*

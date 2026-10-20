@@ -1,0 +1,13 @@
+{
+  "scriptFile": "../timer.py",
+  "bindings": [
+    {
+      "name": "timer",
+      "type": "timerTrigger",
+      "direction": "in",
+      "schedule": "*/20 * * * * *",
+      "runOnStartup": false,
+      "useMonitor": true
+    }
+  ]
+}
